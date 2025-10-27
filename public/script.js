@@ -6,8 +6,62 @@ let currentFilter = 'all';
 let currentTheme = 'light';
 let importData = null;
 
-// API 基础配置
+// API 基础配置 - 使用localStorage代替后端
+const USE_LOCALSTORAGE = true;
 const API_BASE = '/api';
+
+// localStorage数据管理
+const StorageManager = {
+  users: [],
+  events: [],
+  tasks: [],
+  notes: [],
+  files: [],
+  
+  init() {
+    // 初始化演示数据
+    if (!localStorage.getItem('app_initialized')) {
+      localStorage.setItem('app_initialized', 'true');
+      this.saveData();
+    }
+    this.loadData();
+  },
+  
+  loadData() {
+    const data = {
+      users: localStorage.getItem('app_users') || '[]',
+      events: localStorage.getItem('app_events') || '[]',
+      tasks: localStorage.getItem('app_tasks') || '[]',
+      notes: localStorage.getItem('app_notes') || '[]',
+      files: localStorage.getItem('app_files') || '[]'
+    };
+    
+    this.users = JSON.parse(data.users);
+    this.events = JSON.parse(data.events);
+    this.tasks = JSON.parse(data.tasks);
+    this.notes = JSON.parse(data.notes);
+    this.files = JSON.parse(data.files);
+  },
+  
+  saveData() {
+    localStorage.setItem('app_users', JSON.stringify(this.users));
+    localStorage.setItem('app_events', JSON.stringify(this.events));
+    localStorage.setItem('app_tasks', JSON.stringify(this.tasks));
+    localStorage.setItem('app_notes', JSON.stringify(this.notes));
+    localStorage.setItem('app_files', JSON.stringify(this.files));
+  },
+  
+  findById(collection, id) {
+    return collection.find(item => item.id == id);
+  },
+  
+  filterByUser(collection, userId) {
+    return collection.filter(item => item.user_id === userId);
+  }
+};
+
+// 初始化存储
+StorageManager.init();
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
