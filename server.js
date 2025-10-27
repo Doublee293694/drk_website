@@ -1,4 +1,5 @@
 const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -9,14 +10,26 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
+// Supabase初始化
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
+let supabase = null;
+
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('✅ Supabase connected');
+} else {
+  console.log('⚠️ Supabase not configured - using fallback mode');
+}
+
 // 中间件
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// 内存数据库（临时方案 - Vercel兼容）
-const db = {
+// 内存数据库（fallback - 当Supabase未配置时使用）
+let memoryDb = {
   users: [],
   events: [],
   tasks: [],
@@ -25,9 +38,6 @@ const db = {
   notifications: [],
   userIdCounter: 1
 };
-
-// 数据库已准备好（内存数组）
-console.log('Memory database initialized');
 
 // JWT 验证中间件
 const authenticateToken = (req, res, next) => {
@@ -58,86 +68,125 @@ app.post('/api/register', async (req, res) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
     
-    db.run(
-      'INSERT INTO users (username, email, password) VALUES (?, ?, ?)',
-      [username, email, hashedPassword],
-      function(err) {
-        if (err) {
-          if (err.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-            return res.status(400).json({ error: 'Username or email already exists' });
-          }
-          return res.status(500).json({ error: 'Database error' });
+    if (supabase) {
+      // 使用Supabase
+      const { data, error } = await supabase
+        .from('users')
+        .insert([{ username, email, password: hashedPassword }])
+        .select()
+        .single();
+      
+      if (error) {
+        if (error.code === '23505') {
+          return res.status(400).json({ error: 'Username or email already exists' });
         }
-        
-        const token = jwt.sign(
-          { id: this.lastID, username },
-          JWT_SECRET,
-          { expiresIn: '24h' }
-        );
-        
-        res.json({ token, user: { id: this.lastID, username, email } });
+        return res.status(500).json({ error: 'Database error: ' + error.message });
       }
-    );
+      
+      const token = jwt.sign(
+        { id: data.id, username },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ token, user: { id: data.id, username, email } });
+    } else {
+      // Fallback: 使用内存数据库
+      const newUser = {
+        id: memoryDb.userIdCounter++,
+        username,
+        email,
+        password: hashedPassword
+      };
+      memoryDb.users.push(newUser);
+      
+      const token = jwt.sign(
+        { id: newUser.id, username },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      
+      res.json({ token, user: { id: newUser.id, username, email } });
+    }
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // 用户登录
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   
   if (!username || !password) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
-  db.get(
-    'SELECT * FROM users WHERE username = ?',
-    [username],
-    async (err, user) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
+  try {
+    let user = null;
+    
+    if (supabase) {
+      // 使用Supabase
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .single();
+      
+      if (error || !data) {
+        return res.status(401).json({ error: 'Invalid credentials' });
       }
+      user = data;
+    } else {
+      // Fallback: 使用内存数据库
+      user = memoryDb.users.find(u => u.username === username);
       
       if (!user) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
-      
-      try {
-        const validPassword = await bcrypt.compare(password, user.password);
-        if (!validPassword) {
-          return res.status(401).json({ error: 'Invalid credentials' });
-        }
-        
-        const token = jwt.sign(
-          { id: user.id, username: user.username },
-          JWT_SECRET,
-          { expiresIn: '24h' }
-        );
-        
-        res.json({ 
-          token, 
-          user: { id: user.id, username: user.username, email: user.email } 
-        });
-      } catch (error) {
-        res.status(500).json({ error: 'Server error' });
-      }
     }
-  );
+    
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    const token = jwt.sign(
+      { id: user.id, username: user.username },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ 
+      token, 
+      user: { id: user.id, username: user.username, email: user.email } 
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 // 获取用户事件
-app.get('/api/events', authenticateToken, (req, res) => {
-  db.all(
-    'SELECT * FROM events WHERE user_id = ? ORDER BY start_date',
-    [req.user.id],
-    (err, events) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
+app.get('/api/events', authenticateToken, async (req, res) => {
+  try {
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('events')
+        .select('*')
+        .eq('user_id', req.user.id)
+        .order('start_date', { ascending: true });
+      
+      if (error) throw error;
+      res.json(data);
+    } else {
+      const events = memoryDb.events.filter(e => e.user_id === req.user.id);
       res.json(events);
     }
-  );
+  } catch (error) {
+    console.error('Get events error:', error);
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
 // 创建事件
@@ -793,4 +842,5 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
 
