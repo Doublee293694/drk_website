@@ -76,6 +76,15 @@
                 <button class="nav-btn" onclick="showSection('notes')">
                     <i class="fas fa-sticky-note"></i> 笔记
                 </button>
+                <button class="nav-btn" onclick="showSection('files')">
+                    <i class="fas fa-folder"></i> 文件
+                </button>
+                <button class="nav-btn" onclick="showSection('search')">
+                    <i class="fas fa-search"></i> 搜索
+                </button>
+                <button class="nav-btn" onclick="showSection('profile')">
+                    <i class="fas fa-user"></i> 个人资料
+                </button>
             </div>
             <div class="nav-user">
                 <span id="userWelcome">欢迎, <span id="username"></span></span>
@@ -193,6 +202,171 @@
                 </div>
             </div>
         </div>
+
+        <!-- 文件管理 -->
+        <div id="files" class="section">
+            <div class="container">
+                <div class="files-header">
+                    <h1>文件管理</h1>
+                    <div class="file-actions">
+                        <input type="file" id="fileInput" style="display: none;" onchange="uploadFile()">
+                        <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+                            <i class="fas fa-upload"></i> 上传文件
+                        </button>
+                        <button class="btn btn-secondary" onclick="exportData()">
+                            <i class="fas fa-download"></i> 导出数据
+                        </button>
+                        <button class="btn btn-secondary" onclick="showImportModal()">
+                            <i class="fas fa-upload"></i> 导入数据
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="filesList" class="files-list">
+                    <!-- 文件列表将通过JavaScript生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 搜索 -->
+        <div id="search" class="section">
+            <div class="container">
+                <div class="search-header">
+                    <h1>搜索</h1>
+                    <div class="search-controls">
+                        <div class="search-box">
+                            <input type="text" id="searchInput" placeholder="搜索事件、任务、笔记..." onkeypress="handleSearchKeypress(event)">
+                            <button class="btn btn-primary" onclick="performSearch()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div class="search-filters">
+                            <label>
+                                <input type="checkbox" id="searchEvents" checked> 事件
+                            </label>
+                            <label>
+                                <input type="checkbox" id="searchTasks" checked> 任务
+                            </label>
+                            <label>
+                                <input type="checkbox" id="searchNotes" checked> 笔记
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="searchResults" class="search-results">
+                    <div class="empty-state">
+                        <i class="fas fa-search"></i>
+                        <h3>开始搜索</h3>
+                        <p>输入关键词搜索您的事件、任务和笔记</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 个人资料 -->
+        <div id="profile" class="section">
+            <div class="container">
+                <div class="profile-header">
+                    <h1>个人资料</h1>
+                </div>
+                
+                <div class="profile-content">
+                    <div class="profile-sidebar">
+                        <div class="profile-avatar">
+                            <img id="profileAvatar" src="https://via.placeholder.com/150" alt="头像">
+                            <button class="btn btn-secondary" onclick="changeAvatar()">
+                                <i class="fas fa-camera"></i> 更换头像
+                            </button>
+                        </div>
+                        <div class="profile-stats">
+                            <h3>统计信息</h3>
+                            <div id="profileStats">
+                                <p>加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="profile-main">
+                        <div class="profile-tabs">
+                            <button class="tab-btn active" onclick="switchProfileTab('info')">基本信息</button>
+                            <button class="tab-btn" onclick="switchProfileTab('settings')">设置</button>
+                            <button class="tab-btn" onclick="switchProfileTab('password')">修改密码</button>
+                        </div>
+                        
+                        <div id="profileInfo" class="profile-tab-content">
+                            <form id="profileForm" onsubmit="updateProfile(event)">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label for="firstName">名字:</label>
+                                        <input type="text" id="firstName">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="lastName">姓氏:</label>
+                                        <input type="text" id="lastName">
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label for="phone">电话:</label>
+                                    <input type="tel" id="phone">
+                                </div>
+                                <div class="form-group">
+                                    <label for="bio">个人简介:</label>
+                                    <textarea id="bio" rows="4"></textarea>
+                                </div>
+                                <div class="form-group">
+                                    <label for="timezone">时区:</label>
+                                    <select id="timezone">
+                                        <option value="UTC">UTC</option>
+                                        <option value="Asia/Shanghai">北京时间</option>
+                                        <option value="America/New_York">纽约时间</option>
+                                        <option value="Europe/London">伦敦时间</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary">保存更改</button>
+                            </form>
+                        </div>
+                        
+                        <div id="profileSettings" class="profile-tab-content" style="display: none;">
+                            <form id="settingsForm" onsubmit="updateSettings(event)">
+                                <div class="form-group">
+                                    <label for="theme">主题:</label>
+                                    <select id="theme">
+                                        <option value="light">浅色</option>
+                                        <option value="dark">深色</option>
+                                        <option value="auto">自动</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" id="notificationsEnabled"> 启用通知
+                                    </label>
+                                </div>
+                                <button type="submit" class="btn btn-primary">保存设置</button>
+                            </form>
+                        </div>
+                        
+                        <div id="profilePassword" class="profile-tab-content" style="display: none;">
+                            <form id="passwordForm" onsubmit="updatePassword(event)">
+                                <div class="form-group">
+                                    <label for="currentPassword">当前密码:</label>
+                                    <input type="password" id="currentPassword" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="newPassword">新密码:</label>
+                                    <input type="password" id="newPassword" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="confirmPassword">确认新密码:</label>
+                                    <input type="password" id="confirmPassword" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary">修改密码</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 事件模态框 -->
@@ -253,6 +427,25 @@
                     <label for="taskDueDate">截止日期:</label>
                     <input type="datetime-local" id="taskDueDate">
                 </div>
+                <div class="form-group">
+                    <label for="taskCategory">分类:</label>
+                    <select id="taskCategory">
+                        <option value="general">一般</option>
+                        <option value="work">工作</option>
+                        <option value="personal">个人</option>
+                        <option value="study">学习</option>
+                        <option value="project">项目</option>
+                        <option value="urgent">紧急</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskTags">标签 (用逗号分隔):</label>
+                    <input type="text" id="taskTags" placeholder="重要, 项目, 会议">
+                </div>
+                <div class="form-group">
+                    <label for="taskReminder">提醒时间:</label>
+                    <input type="datetime-local" id="taskReminder">
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
@@ -276,11 +469,51 @@
                     <label for="noteContent">内容:</label>
                     <textarea id="noteContent" rows="10"></textarea>
                 </div>
+                <div class="form-group">
+                    <label for="noteTags">标签 (用逗号分隔):</label>
+                    <input type="text" id="noteTags" placeholder="工作, 重要, 项目">
+                </div>
+                <div class="form-group">
+                    <label for="noteCategory">分类:</label>
+                    <select id="noteCategory">
+                        <option value="general">一般</option>
+                        <option value="work">工作</option>
+                        <option value="personal">个人</option>
+                        <option value="study">学习</option>
+                        <option value="project">项目</option>
+                    </select>
+                </div>
                 <div class="form-actions">
                     <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">取消</button>
                     <button type="submit" class="btn btn-primary">保存</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 导入数据模态框 -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>导入数据</h2>
+            <div class="import-content">
+                <div class="import-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p><strong>注意：</strong>导入数据将添加到现有数据中，不会覆盖现有内容。</p>
+                </div>
+                <div class="form-group">
+                    <label for="importFile">选择JSON文件:</label>
+                    <input type="file" id="importFile" accept=".json" onchange="handleImportFile(event)">
+                </div>
+                <div class="import-preview" id="importPreview" style="display: none;">
+                    <h3>预览数据:</h3>
+                    <div id="importData"></div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeImportModal()">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="confirmImport()" id="importBtn" disabled>导入数据</button>
+                </div>
+            </div>
         </div>
     </div>
 

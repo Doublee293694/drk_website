@@ -3,6 +3,8 @@ let currentUser = null;
 let currentToken = null;
 let currentDate = new Date();
 let currentFilter = 'all';
+let currentTheme = 'light';
+let importData = null;
 
 // API 基础配置
 const API_BASE = '/api';
@@ -455,8 +457,10 @@ function displayTasks(tasks) {
                 ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
                 <div class="task-meta">
                     <span class="task-priority ${task.priority}">${getPriorityText(task.priority)}</span>
+                    ${task.category ? `<span class="task-category ${task.category}">${getCategoryText(task.category)}</span>` : ''}
                     ${task.due_date ? `<span>截止: ${new Date(task.due_date).toLocaleDateString()}</span>` : ''}
                 </div>
+                ${task.tags ? `<div class="task-tags">${task.tags.split(',').map(tag => `<span class="task-tag">${tag.trim()}</span>`).join('')}</div>` : ''}
             </div>
             <div class="task-actions">
                 <button class="edit-btn" onclick="editTask(${task.id})">编辑</button>
@@ -507,9 +511,15 @@ async function loadTaskData(taskId) {
             document.getElementById('taskTitle').value = task.title;
             document.getElementById('taskDescription').value = task.description || '';
             document.getElementById('taskPriority').value = task.priority;
+            document.getElementById('taskCategory').value = task.category || 'general';
+            document.getElementById('taskTags').value = task.tags || '';
             if (task.due_date) {
                 document.getElementById('taskDueDate').value = 
                     new Date(task.due_date).toISOString().slice(0, 16);
+            }
+            if (task.reminder_date) {
+                document.getElementById('taskReminder').value = 
+                    new Date(task.reminder_date).toISOString().slice(0, 16);
             }
         }
     } catch (error) {
@@ -525,7 +535,10 @@ async function saveTask(event) {
         title: formData.get('taskTitle') || document.getElementById('taskTitle').value,
         description: formData.get('taskDescription') || document.getElementById('taskDescription').value,
         priority: formData.get('taskPriority') || document.getElementById('taskPriority').value,
-        due_date: formData.get('taskDueDate') || document.getElementById('taskDueDate').value
+        due_date: formData.get('taskDueDate') || document.getElementById('taskDueDate').value,
+        category: formData.get('taskCategory') || document.getElementById('taskCategory').value,
+        tags: formData.get('taskTags') || document.getElementById('taskTags').value,
+        reminder_date: formData.get('taskReminder') || document.getElementById('taskReminder').value
     };
     
     const taskId = document.getElementById('taskId').value;
@@ -547,13 +560,14 @@ async function saveTask(event) {
             closeTaskModal();
             loadTasks();
             loadDashboardData();
+            showNotification('任务保存成功', 'success');
         } else {
             const data = await response.json();
-            alert('保存任务失败: ' + data.error);
+            showNotification('保存任务失败: ' + data.error, 'error');
         }
     } catch (error) {
         console.error('保存任务错误:', error);
-        alert('保存任务失败，请重试');
+        showNotification('保存任务失败，请重试', 'error');
     }
 }
 
@@ -673,6 +687,8 @@ async function loadNoteData(noteId) {
         if (note) {
             document.getElementById('noteTitle').value = note.title;
             document.getElementById('noteContent').value = note.content || '';
+            document.getElementById('noteTags').value = note.tags || '';
+            document.getElementById('noteCategory').value = note.category || 'general';
         }
     } catch (error) {
         console.error('加载笔记数据失败:', error);
@@ -685,7 +701,9 @@ async function saveNote(event) {
     const formData = new FormData(event.target);
     const noteData = {
         title: formData.get('noteTitle') || document.getElementById('noteTitle').value,
-        content: formData.get('noteContent') || document.getElementById('noteContent').value
+        content: formData.get('noteContent') || document.getElementById('noteContent').value,
+        tags: formData.get('noteTags') || document.getElementById('noteTags').value,
+        category: formData.get('noteCategory') || document.getElementById('noteCategory').value
     };
     
     const noteId = document.getElementById('noteId').value;
@@ -707,13 +725,14 @@ async function saveNote(event) {
             closeNoteModal();
             loadNotes();
             loadDashboardData();
+            showNotification('笔记保存成功', 'success');
         } else {
             const data = await response.json();
-            alert('保存笔记失败: ' + data.error);
+            showNotification('保存笔记失败: ' + data.error, 'error');
         }
     } catch (error) {
         console.error('保存笔记错误:', error);
-        alert('保存笔记失败，请重试');
+        showNotification('保存笔记失败，请重试', 'error');
     }
 }
 
@@ -803,3 +822,645 @@ async function fetchNotes() {
     
     return await response.json();
 }
+
+// 文件管理功能
+async function loadFiles() {
+    try {
+        const response = await fetch(`${API_BASE}/files`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch files');
+        }
+        
+        const files = await response.json();
+        displayFiles(files);
+    } catch (error) {
+        console.error('加载文件失败:', error);
+    }
+}
+
+function displayFiles(files) {
+    const filesList = document.getElementById('filesList');
+    
+    if (files.length === 0) {
+        filesList.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-folder-open"></i>
+                <h3>暂无文件</h3>
+                <p>点击"上传文件"按钮上传您的第一个文件</p>
+            </div>
+        `;
+        return;
+    }
+    
+    filesList.innerHTML = files.map(file => `
+        <div class="file-item">
+            <div class="file-icon">
+                <i class="fas fa-file"></i>
+            </div>
+            <div class="file-info">
+                <div class="file-name">${file.original_name}</div>
+                <div class="file-meta">
+                    ${formatFileSize(file.file_size)} • ${new Date(file.created_at).toLocaleDateString()}
+                </div>
+            </div>
+            <div class="file-actions">
+                <button class="btn btn-secondary" onclick="deleteFile(${file.id})">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function uploadFile() {
+    const fileInput = document.getElementById('fileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+        const response = await fetch(`${API_BASE}/upload`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: formData
+        });
+        
+        if (response.ok) {
+            showNotification('文件上传成功', 'success');
+            loadFiles();
+            fileInput.value = '';
+        } else {
+            const data = await response.json();
+            showNotification('文件上传失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('文件上传错误:', error);
+        showNotification('文件上传失败，请重试', 'error');
+    }
+}
+
+async function deleteFile(fileId) {
+    if (!confirm('确定要删除这个文件吗？')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/files/${fileId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (response.ok) {
+            showNotification('文件删除成功', 'success');
+            loadFiles();
+        } else {
+            const data = await response.json();
+            showNotification('文件删除失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('文件删除错误:', error);
+        showNotification('文件删除失败，请重试', 'error');
+    }
+}
+
+// 数据导出功能
+async function exportData() {
+    try {
+        const response = await fetch(`${API_BASE}/export`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Export failed');
+        }
+        
+        const data = await response.json();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `data-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showNotification('数据导出成功', 'success');
+    } catch (error) {
+        console.error('数据导出失败:', error);
+        showNotification('数据导出失败，请重试', 'error');
+    }
+}
+
+// 数据导入功能
+function showImportModal() {
+    document.getElementById('importModal').style.display = 'block';
+    document.getElementById('importPreview').style.display = 'none';
+    document.getElementById('importBtn').disabled = true;
+    importData = null;
+}
+
+function closeImportModal() {
+    document.getElementById('importModal').style.display = 'none';
+}
+
+function handleImportFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const data = JSON.parse(e.target.result);
+            importData = data;
+            
+            // 显示预览
+            const preview = document.getElementById('importPreview');
+            const previewData = document.getElementById('importData');
+            
+            previewData.innerHTML = `
+                <div><strong>事件:</strong> ${data.events ? data.events.length : 0} 个</div>
+                <div><strong>任务:</strong> ${data.tasks ? data.tasks.length : 0} 个</div>
+                <div><strong>笔记:</strong> ${data.notes ? data.notes.length : 0} 个</div>
+                <div><strong>导出日期:</strong> ${data.export_date ? new Date(data.export_date).toLocaleString() : '未知'}</div>
+            `;
+            
+            preview.style.display = 'block';
+            document.getElementById('importBtn').disabled = false;
+        } catch (error) {
+            showNotification('文件格式错误，请选择有效的JSON文件', 'error');
+        }
+    };
+    reader.readAsText(file);
+}
+
+async function confirmImport() {
+    if (!importData) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/import`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify(importData)
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            showNotification(`数据导入成功！导入了 ${result.imported} 个项目`, 'success');
+            closeImportModal();
+            
+            // 刷新相关页面
+            loadDashboardData();
+            loadCalendar();
+            loadTasks();
+            loadNotes();
+        } else {
+            const data = await response.json();
+            showNotification('数据导入失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('数据导入错误:', error);
+        showNotification('数据导入失败，请重试', 'error');
+    }
+}
+
+// 搜索功能
+function handleSearchKeypress(event) {
+    if (event.key === 'Enter') {
+        performSearch();
+    }
+}
+
+async function performSearch() {
+    const query = document.getElementById('searchInput').value.trim();
+    if (!query) return;
+    
+    const types = [];
+    if (document.getElementById('searchEvents').checked) types.push('events');
+    if (document.getElementById('searchTasks').checked) types.push('tasks');
+    if (document.getElementById('searchNotes').checked) types.push('notes');
+    
+    if (types.length === 0) {
+        showNotification('请至少选择一个搜索类型', 'warning');
+        return;
+    }
+    
+    try {
+        const typeParam = types.length === 3 ? '' : `&type=${types.join(',')}`;
+        const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}${typeParam}`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Search failed');
+        }
+        
+        const results = await response.json();
+        displaySearchResults(results, query);
+    } catch (error) {
+        console.error('搜索失败:', error);
+        showNotification('搜索失败，请重试', 'error');
+    }
+}
+
+function displaySearchResults(results, query) {
+    const searchResults = document.getElementById('searchResults');
+    
+    let html = '';
+    
+    if (results.events.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h3><i class="fas fa-calendar"></i> 事件 (${results.events.length})</h3>
+                ${results.events.map(event => `
+                    <div class="search-result-item">
+                        <div class="search-result-title">${highlightText(event.title, query)}</div>
+                        <div class="search-result-content">${highlightText(event.description || '', query)}</div>
+                        <div class="search-result-meta">${new Date(event.start_date).toLocaleString()}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    if (results.tasks.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h3><i class="fas fa-tasks"></i> 任务 (${results.tasks.length})</h3>
+                ${results.tasks.map(task => `
+                    <div class="search-result-item">
+                        <div class="search-result-title">${highlightText(task.title, query)}</div>
+                        <div class="search-result-content">${highlightText(task.description || '', query)}</div>
+                        <div class="search-result-meta">
+                            ${task.completed ? '已完成' : '待完成'} • 
+                            ${task.category ? getCategoryText(task.category) : ''} • 
+                            ${task.due_date ? new Date(task.due_date).toLocaleDateString() : '无截止日期'}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    if (results.notes.length > 0) {
+        html += `
+            <div class="search-result-section">
+                <h3><i class="fas fa-sticky-note"></i> 笔记 (${results.notes.length})</h3>
+                ${results.notes.map(note => `
+                    <div class="search-result-item">
+                        <div class="search-result-title">${highlightText(note.title, query)}</div>
+                        <div class="search-result-content">${highlightText(note.content || '', query)}</div>
+                        <div class="search-result-meta">${new Date(note.updated_at).toLocaleDateString()}</div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    if (html === '') {
+        html = `
+            <div class="empty-state">
+                <i class="fas fa-search"></i>
+                <h3>未找到结果</h3>
+                <p>没有找到包含 "${query}" 的内容</p>
+            </div>
+        `;
+    }
+    
+    searchResults.innerHTML = html;
+}
+
+function highlightText(text, query) {
+    if (!query) return text;
+    const regex = new RegExp(`(${query})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+}
+
+function getCategoryText(category) {
+    const categoryMap = {
+        'general': '一般',
+        'work': '工作',
+        'personal': '个人',
+        'study': '学习',
+        'project': '项目',
+        'urgent': '紧急'
+    };
+    return categoryMap[category] || category;
+}
+
+// 个人资料功能
+let currentProfileTab = 'info';
+
+async function loadProfile() {
+    try {
+        const response = await fetch(`${API_BASE}/profile`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch profile');
+        }
+        
+        const profile = await response.json();
+        displayProfile(profile);
+        loadProfileStats();
+    } catch (error) {
+        console.error('加载个人资料失败:', error);
+    }
+}
+
+function displayProfile(profile) {
+    document.getElementById('firstName').value = profile.first_name || '';
+    document.getElementById('lastName').value = profile.last_name || '';
+    document.getElementById('phone').value = profile.phone || '';
+    document.getElementById('bio').value = profile.bio || '';
+    document.getElementById('timezone').value = profile.timezone || 'UTC';
+    document.getElementById('theme').value = profile.theme || 'light';
+    document.getElementById('notificationsEnabled').checked = profile.notifications_enabled;
+    
+    if (profile.avatar) {
+        document.getElementById('profileAvatar').src = profile.avatar;
+    }
+    
+    // 应用主题
+    applyTheme(profile.theme || 'light');
+}
+
+async function loadProfileStats() {
+    try {
+        const response = await fetch(`${API_BASE}/stats`, {
+            headers: {
+                'Authorization': `Bearer ${currentToken}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to fetch stats');
+        }
+        
+        const stats = await response.json();
+        displayProfileStats(stats);
+    } catch (error) {
+        console.error('加载统计信息失败:', error);
+    }
+}
+
+function displayProfileStats(stats) {
+    const statsContainer = document.getElementById('profileStats');
+    statsContainer.innerHTML = `
+        <div class="stat-item">
+            <span>总事件</span>
+            <span>${stats.events || 0}</span>
+        </div>
+        <div class="stat-item">
+            <span>总任务</span>
+            <span>${stats.tasks || 0}</span>
+        </div>
+        <div class="stat-item">
+            <span>已完成</span>
+            <span>${stats.completedTasks || 0}</span>
+        </div>
+        <div class="stat-item">
+            <span>完成率</span>
+            <span>${stats.completionRate || 0}%</span>
+        </div>
+        <div class="stat-item">
+            <span>笔记数</span>
+            <span>${stats.notes || 0}</span>
+        </div>
+    `;
+}
+
+function switchProfileTab(tab) {
+    // 隐藏所有标签内容
+    document.querySelectorAll('.profile-tab-content').forEach(content => {
+        content.style.display = 'none';
+    });
+    
+    // 移除所有标签按钮的活跃状态
+    document.querySelectorAll('.profile-tabs .tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 显示选中的标签内容
+    document.getElementById(`profile${tab.charAt(0).toUpperCase() + tab.slice(1)}`).style.display = 'block';
+    
+    // 激活选中的标签按钮
+    event.target.classList.add('active');
+    
+    currentProfileTab = tab;
+}
+
+async function updateProfile(event) {
+    event.preventDefault();
+    
+    const profileData = {
+        first_name: document.getElementById('firstName').value,
+        last_name: document.getElementById('lastName').value,
+        phone: document.getElementById('phone').value,
+        bio: document.getElementById('bio').value,
+        timezone: document.getElementById('timezone').value
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify(profileData)
+        });
+        
+        if (response.ok) {
+            showNotification('个人资料更新成功', 'success');
+        } else {
+            const data = await response.json();
+            showNotification('更新失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('更新个人资料错误:', error);
+        showNotification('更新失败，请重试', 'error');
+    }
+}
+
+async function updateSettings(event) {
+    event.preventDefault();
+    
+    const settingsData = {
+        theme: document.getElementById('theme').value,
+        notifications_enabled: document.getElementById('notificationsEnabled').checked
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/profile`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify(settingsData)
+        });
+        
+        if (response.ok) {
+            showNotification('设置更新成功', 'success');
+            applyTheme(settingsData.theme);
+        } else {
+            const data = await response.json();
+            showNotification('更新失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('更新设置错误:', error);
+        showNotification('更新失败，请重试', 'error');
+    }
+}
+
+async function updatePassword(event) {
+    event.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (newPassword !== confirmPassword) {
+        showNotification('新密码和确认密码不匹配', 'error');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/profile/password`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentToken}`
+            },
+            body: JSON.stringify({ currentPassword, newPassword })
+        });
+        
+        if (response.ok) {
+            showNotification('密码修改成功', 'success');
+            document.getElementById('passwordForm').reset();
+        } else {
+            const data = await response.json();
+            showNotification('密码修改失败: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('修改密码错误:', error);
+        showNotification('密码修改失败，请重试', 'error');
+    }
+}
+
+function changeAvatar() {
+    // 简单的头像更换功能
+    const newAvatar = prompt('请输入头像URL:');
+    if (newAvatar) {
+        document.getElementById('profileAvatar').src = newAvatar;
+        showNotification('头像更新成功', 'success');
+    }
+}
+
+function applyTheme(theme) {
+    currentTheme = theme;
+    document.body.className = theme === 'dark' ? 'dark-theme' : '';
+    localStorage.setItem('theme', theme);
+}
+
+// 通知功能
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.className = `notification ${type}`;
+    notification.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; font-size: 18px; cursor: pointer;">&times;</button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // 自动移除通知
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+// 更新showSection函数以支持新功能
+function showSection(sectionName) {
+    // 隐藏所有部分
+    document.querySelectorAll('.section').forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    // 移除所有导航按钮的活跃状态
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 显示指定部分
+    document.getElementById(sectionName).classList.add('active');
+    
+    // 激活对应的导航按钮
+    event.target.classList.add('active');
+    
+    // 根据部分加载相应数据
+    switch(sectionName) {
+        case 'dashboard':
+            loadDashboardData();
+            break;
+        case 'calendar':
+            loadCalendar();
+            break;
+        case 'tasks':
+            loadTasks();
+            break;
+        case 'notes':
+            loadNotes();
+            break;
+        case 'files':
+            loadFiles();
+            break;
+        case 'search':
+            // 搜索页面不需要预加载
+            break;
+        case 'profile':
+            loadProfile();
+            break;
+    }
+}
+
+// 初始化主题
+document.addEventListener('DOMContentLoaded', function() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    applyTheme(savedTheme);
+});

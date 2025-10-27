@@ -27,7 +27,16 @@ db.serialize(() => {
     username TEXT UNIQUE NOT NULL,
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    avatar TEXT,
+    first_name TEXT,
+    last_name TEXT,
+    phone TEXT,
+    bio TEXT,
+    timezone TEXT DEFAULT 'UTC',
+    theme TEXT DEFAULT 'light',
+    notifications_enabled BOOLEAN DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`);
 
   // 事件表
@@ -49,9 +58,13 @@ db.serialize(() => {
     description TEXT,
     completed BOOLEAN DEFAULT 0,
     priority TEXT DEFAULT 'medium',
+    category TEXT DEFAULT 'general',
+    tags TEXT,
     due_date DATETIME,
+    reminder_date DATETIME,
     user_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 
@@ -60,9 +73,36 @@ db.serialize(() => {
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
     content TEXT,
+    tags TEXT,
+    category TEXT DEFAULT 'general',
     user_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+  )`);
+
+  // 文件表
+  db.run(`CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    file_size INTEGER,
+    mime_type TEXT,
+    user_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id)
+  )`);
+
+  // 通知表
+  db.run(`CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    message TEXT,
+    type TEXT DEFAULT 'info',
+    read BOOLEAN DEFAULT 0,
+    user_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id)
   )`);
 });
@@ -409,6 +449,388 @@ app.delete('/api/notes/:id', authenticateToken, (req, res) => {
       res.json({ message: 'Note deleted successfully' });
     }
   );
+});
+
+// 用户个人资料相关API
+// 获取用户资料
+app.get('/api/profile', authenticateToken, (req, res) => {
+  db.get(
+    'SELECT id, username, email, avatar, first_name, last_name, phone, bio, timezone, theme, notifications_enabled FROM users WHERE id = ?',
+    [req.user.id],
+    (err, user) => {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json(user);
+    }
+  );
+});
+
+// 更新用户资料
+app.put('/api/profile', authenticateToken, (req, res) => {
+  const { first_name, last_name, phone, bio, timezone, theme, notifications_enabled } = req.body;
+  
+  db.run(
+    'UPDATE users SET first_name = ?, last_name = ?, phone = ?, bio = ?, timezone = ?, theme = ?, notifications_enabled = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [first_name, last_name, phone, bio, timezone, theme, notifications_enabled, req.user.id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json({ message: 'Profile updated successfully' });
+    }
+  );
+});
+
+// 修改密码
+app.put('/api/profile/password', authenticateToken, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'Current password and new password are required' });
+  }
+
+  try {
+    // 验证当前密码
+    const user = await new Promise((resolve, reject) => {
+      db.get('SELECT password FROM users WHERE id = ?', [req.user.id], (err, user) => {
+        if (err) reject(err);
+        else resolve(user);
+      });
+    });
+
+    const validPassword = await bcrypt.compare(currentPassword, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+
+    // 更新密码
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    db.run(
+      'UPDATE users SET password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [hashedPassword, req.user.id],
+      function(err) {
+        if (err) {
+          return res.status(500).json({ error: 'Database error' });
+        }
+        res.json({ message: 'Password updated successfully' });
+      }
+    );
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// 文件上传
+const multer = require('multer');
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + '-' + file.originalname);
+  }
+});
+const upload = multer({ storage: storage });
+
+app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  db.run(
+    'INSERT INTO files (filename, original_name, file_path, file_size, mime_type, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [req.file.filename, req.file.originalname, req.file.path, req.file.size, req.file.mimetype, req.user.id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json({ 
+        id: this.lastID,
+        filename: req.file.filename,
+        original_name: req.file.originalname,
+        file_size: req.file.size,
+        mime_type: req.file.mimetype
+      });
+    }
+  );
+});
+
+// 获取用户文件
+app.get('/api/files', authenticateToken, (req, res) => {
+  db.all(
+    'SELECT * FROM files WHERE user_id = ? ORDER BY created_at DESC',
+    [req.user.id],
+    (err, files) => {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json(files);
+    }
+  );
+});
+
+// 删除文件
+app.delete('/api/files/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  
+  db.run(
+    'DELETE FROM files WHERE id = ? AND user_id = ?',
+    [id, req.user.id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+      res.json({ message: 'File deleted successfully' });
+    }
+  );
+});
+
+// 通知相关API
+// 获取通知
+app.get('/api/notifications', authenticateToken, (req, res) => {
+  db.all(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC',
+    [req.user.id],
+    (err, notifications) => {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json(notifications);
+    }
+  );
+});
+
+// 标记通知为已读
+app.put('/api/notifications/:id/read', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  
+  db.run(
+    'UPDATE notifications SET read = 1 WHERE id = ? AND user_id = ?',
+    [id, req.user.id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json({ message: 'Notification marked as read' });
+    }
+  );
+});
+
+// 删除通知
+app.delete('/api/notifications/:id', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  
+  db.run(
+    'DELETE FROM notifications WHERE id = ? AND user_id = ?',
+    [id, req.user.id],
+    function(err) {
+      if (err) {
+        return res.status(500).json({ error: 'Database error' });
+      }
+      res.json({ message: 'Notification deleted successfully' });
+    }
+  );
+});
+
+// 数据导出
+app.get('/api/export', authenticateToken, async (req, res) => {
+  try {
+    const [events, tasks, notes] = await Promise.all([
+      new Promise((resolve, reject) => {
+        db.all('SELECT * FROM events WHERE user_id = ?', [req.user.id], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      }),
+      new Promise((resolve, reject) => {
+        db.all('SELECT * FROM tasks WHERE user_id = ?', [req.user.id], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      }),
+      new Promise((resolve, reject) => {
+        db.all('SELECT * FROM notes WHERE user_id = ?', [req.user.id], (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        });
+      })
+    ]);
+
+    const exportData = {
+      export_date: new Date().toISOString(),
+      user_id: req.user.id,
+      events,
+      tasks,
+      notes
+    };
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="data-export.json"');
+    res.json(exportData);
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+// 数据导入
+app.post('/api/import', authenticateToken, (req, res) => {
+  const { events, tasks, notes } = req.body;
+  
+  if (!events && !tasks && !notes) {
+    return res.status(400).json({ error: 'No data to import' });
+  }
+
+  let importedCount = 0;
+  let errorCount = 0;
+
+  // 导入事件
+  if (events && Array.isArray(events)) {
+    events.forEach(event => {
+      db.run(
+        'INSERT INTO events (title, description, start_date, end_date, user_id) VALUES (?, ?, ?, ?, ?)',
+        [event.title, event.description, event.start_date, event.end_date, req.user.id],
+        function(err) {
+          if (err) errorCount++;
+          else importedCount++;
+        }
+      );
+    });
+  }
+
+  // 导入任务
+  if (tasks && Array.isArray(tasks)) {
+    tasks.forEach(task => {
+      db.run(
+        'INSERT INTO tasks (title, description, completed, priority, category, tags, due_date, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [task.title, task.description, task.completed || 0, task.priority, task.category, task.tags, task.due_date, req.user.id],
+        function(err) {
+          if (err) errorCount++;
+          else importedCount++;
+        }
+      );
+    });
+  }
+
+  // 导入笔记
+  if (notes && Array.isArray(notes)) {
+    notes.forEach(note => {
+      db.run(
+        'INSERT INTO notes (title, content, tags, category, user_id) VALUES (?, ?, ?, ?, ?)',
+        [note.title, note.content, note.tags, note.category, req.user.id],
+        function(err) {
+          if (err) errorCount++;
+          else importedCount++;
+        }
+      );
+    });
+  }
+
+  res.json({ 
+    message: 'Import completed',
+    imported: importedCount,
+    errors: errorCount
+  });
+});
+
+// 搜索功能
+app.get('/api/search', authenticateToken, (req, res) => {
+  const { q, type } = req.query;
+  
+  if (!q) {
+    return res.status(400).json({ error: 'Search query is required' });
+  }
+
+  const searchTerm = `%${q}%`;
+  const results = { events: [], tasks: [], notes: [] };
+
+  // 搜索事件
+  if (!type || type === 'events') {
+    db.all(
+      'SELECT * FROM events WHERE user_id = ? AND (title LIKE ? OR description LIKE ?)',
+      [req.user.id, searchTerm, searchTerm],
+      (err, events) => {
+        if (!err) results.events = events;
+        checkComplete();
+      }
+    );
+  } else {
+    checkComplete();
+  }
+
+  // 搜索任务
+  if (!type || type === 'tasks') {
+    db.all(
+      'SELECT * FROM tasks WHERE user_id = ? AND (title LIKE ? OR description LIKE ? OR tags LIKE ?)',
+      [req.user.id, searchTerm, searchTerm, searchTerm],
+      (err, tasks) => {
+        if (!err) results.tasks = tasks;
+        checkComplete();
+      }
+    );
+  } else {
+    checkComplete();
+  }
+
+  // 搜索笔记
+  if (!type || type === 'notes') {
+    db.all(
+      'SELECT * FROM notes WHERE user_id = ? AND (title LIKE ? OR content LIKE ? OR tags LIKE ?)',
+      [req.user.id, searchTerm, searchTerm, searchTerm],
+      (err, notes) => {
+        if (!err) results.notes = notes;
+        checkComplete();
+      }
+    );
+  } else {
+    checkComplete();
+  }
+
+  let completed = 0;
+  function checkComplete() {
+    completed++;
+    if (completed === 3) {
+      res.json(results);
+    }
+  }
+});
+
+// 统计信息
+app.get('/api/stats', authenticateToken, (req, res) => {
+  const stats = {};
+  
+  // 获取各种统计数据
+  db.get('SELECT COUNT(*) as count FROM events WHERE user_id = ?', [req.user.id], (err, result) => {
+    if (!err) stats.events = result.count;
+    checkComplete();
+  });
+  
+  db.get('SELECT COUNT(*) as count FROM tasks WHERE user_id = ?', [req.user.id], (err, result) => {
+    if (!err) stats.tasks = result.count;
+    checkComplete();
+  });
+  
+  db.get('SELECT COUNT(*) as count FROM tasks WHERE user_id = ? AND completed = 1', [req.user.id], (err, result) => {
+    if (!err) stats.completedTasks = result.count;
+    checkComplete();
+  });
+  
+  db.get('SELECT COUNT(*) as count FROM notes WHERE user_id = ?', [req.user.id], (err, result) => {
+    if (!err) stats.notes = result.count;
+    checkComplete();
+  });
+
+  let completed = 0;
+  function checkComplete() {
+    completed++;
+    if (completed === 4) {
+      stats.completionRate = stats.tasks > 0 ? Math.round((stats.completedTasks / stats.tasks) * 100) : 0;
+      res.json(stats);
+    }
+  }
 });
 
 // 主页路由
