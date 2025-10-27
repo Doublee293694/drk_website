@@ -1464,6 +1464,12 @@ function showSection(sectionName) {
 
 // WordPress博客集成功能
 let wordPressPosts = [];
+let savedWordPressUrl = localStorage.getItem('wordpress_url') || '';
+
+// 加载已保存的WordPress URL
+if (savedWordPressUrl) {
+    document.getElementById('wordpressUrl').value = savedWordPressUrl;
+}
 
 async function loadWordPressBlog() {
     const wpUrl = document.getElementById('wordpressUrl').value.trim();
@@ -1489,6 +1495,9 @@ async function loadWordPressBlog() {
         const posts = await response.json();
         wordPressPosts = posts;
         displayBlogPosts(posts, blogUrl);
+        
+        // 保存URL到本地存储
+        localStorage.setItem('wordpress_url', blogUrl);
         
         showNotification(`成功加载 ${posts.length} 篇文章`, 'success');
     } catch (error) {
@@ -1547,6 +1556,20 @@ function displayBlogPosts(posts, blogUrl) {
             </div>
         `;
     }).join('');
+}
+
+function openWordPressAdmin() {
+    const wpUrl = document.getElementById('wordpressUrl').value.trim();
+    
+    if (!wpUrl) {
+        showNotification('请输入WordPress网站URL', 'error');
+        return;
+    }
+    
+    const blogUrl = wpUrl.endsWith('/') ? wpUrl.slice(0, -1) : wpUrl;
+    const adminUrl = `${blogUrl}/wp-admin`;
+    
+    window.open(adminUrl, '_blank');
 }
 
 function showBlogPost(index) {
