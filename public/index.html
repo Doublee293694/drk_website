@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多功能网站 - 日历与任务管理</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <!-- 登录/注册模态框 -->
+    <div id="authModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div class="auth-container">
+                <div class="auth-tabs">
+                    <button class="tab-btn active" onclick="switchTab('login')">登录</button>
+                    <button class="tab-btn" onclick="switchTab('register')">注册</button>
+                </div>
+                
+                <div id="loginForm" class="auth-form">
+                    <h2>登录</h2>
+                    <form onsubmit="login(event)">
+                        <div class="form-group">
+                            <label for="loginUsername">用户名:</label>
+                            <input type="text" id="loginUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="loginPassword">密码:</label>
+                            <input type="password" id="loginPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">登录</button>
+                    </form>
+                </div>
+                
+                <div id="registerForm" class="auth-form" style="display: none;">
+                    <h2>注册</h2>
+                    <form onsubmit="register(event)">
+                        <div class="form-group">
+                            <label for="registerUsername">用户名:</label>
+                            <input type="text" id="registerUsername" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerEmail">邮箱:</label>
+                            <input type="email" id="registerEmail" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="registerPassword">密码:</label>
+                            <input type="password" id="registerPassword" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">注册</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainApp" style="display: none;">
+        <!-- 导航栏 -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <i class="fas fa-calendar-alt"></i>
+                <span>多功能网站</span>
+            </div>
+            <div class="nav-menu">
+                <button class="nav-btn active" onclick="showSection('dashboard')">
+                    <i class="fas fa-home"></i> 仪表板
+                </button>
+                <button class="nav-btn" onclick="showSection('calendar')">
+                    <i class="fas fa-calendar"></i> 日历
+                </button>
+                <button class="nav-btn" onclick="showSection('tasks')">
+                    <i class="fas fa-tasks"></i> 任务
+                </button>
+                <button class="nav-btn" onclick="showSection('notes')">
+                    <i class="fas fa-sticky-note"></i> 笔记
+                </button>
+            </div>
+            <div class="nav-user">
+                <span id="userWelcome">欢迎, <span id="username"></span></span>
+                <button class="btn btn-secondary" onclick="logout()">退出</button>
+            </div>
+        </nav>
+
+        <!-- 仪表板 -->
+        <div id="dashboard" class="section active">
+            <div class="container">
+                <h1>仪表板</h1>
+                <div class="dashboard-grid">
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <i class="fas fa-calendar-check"></i>
+                            <h3>今日事件</h3>
+                        </div>
+                        <div id="todayEvents" class="card-content">
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <i class="fas fa-tasks"></i>
+                            <h3>待办任务</h3>
+                        </div>
+                        <div id="pendingTasks" class="card-content">
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <i class="fas fa-sticky-note"></i>
+                            <h3>最近笔记</h3>
+                        </div>
+                        <div id="recentNotes" class="card-content">
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                    
+                    <div class="dashboard-card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-pie"></i>
+                            <h3>统计信息</h3>
+                        </div>
+                        <div id="stats" class="card-content">
+                            <p>加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日历 -->
+        <div id="calendar" class="section">
+            <div class="container">
+                <div class="calendar-header">
+                    <h1>日历</h1>
+                    <div class="calendar-controls">
+                        <button class="btn btn-secondary" onclick="previousMonth()">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        <span id="currentMonth"></span>
+                        <button class="btn btn-secondary" onclick="nextMonth()">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                        <button class="btn btn-primary" onclick="showEventModal()">
+                            <i class="fas fa-plus"></i> 添加事件
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="calendar-grid" id="calendarGrid">
+                    <!-- 日历网格将通过JavaScript生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务管理 -->
+        <div id="tasks" class="section">
+            <div class="container">
+                <div class="tasks-header">
+                    <h1>任务管理</h1>
+                    <button class="btn btn-primary" onclick="showTaskModal()">
+                        <i class="fas fa-plus"></i> 添加任务
+                    </button>
+                </div>
+                
+                <div class="tasks-filters">
+                    <button class="filter-btn active" onclick="filterTasks('all')">全部</button>
+                    <button class="filter-btn" onclick="filterTasks('pending')">待完成</button>
+                    <button class="filter-btn" onclick="filterTasks('completed')">已完成</button>
+                </div>
+                
+                <div id="tasksList" class="tasks-list">
+                    <!-- 任务列表将通过JavaScript生成 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 笔记 -->
+        <div id="notes" class="section">
+            <div class="container">
+                <div class="notes-header">
+                    <h1>笔记</h1>
+                    <button class="btn btn-primary" onclick="showNoteModal()">
+                        <i class="fas fa-plus"></i> 添加笔记
+                    </button>
+                </div>
+                
+                <div id="notesList" class="notes-list">
+                    <!-- 笔记列表将通过JavaScript生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 事件模态框 -->
+    <div id="eventModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="eventModalTitle">添加事件</h2>
+            <form id="eventForm" onsubmit="saveEvent(event)">
+                <input type="hidden" id="eventId">
+                <div class="form-group">
+                    <label for="eventTitle">标题:</label>
+                    <input type="text" id="eventTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventDescription">描述:</label>
+                    <textarea id="eventDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="eventStartDate">开始时间:</label>
+                    <input type="datetime-local" id="eventStartDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="eventEndDate">结束时间:</label>
+                    <input type="datetime-local" id="eventEndDate" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeEventModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 任务模态框 -->
+    <div id="taskModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="taskModalTitle">添加任务</h2>
+            <form id="taskForm" onsubmit="saveTask(event)">
+                <input type="hidden" id="taskId">
+                <div class="form-group">
+                    <label for="taskTitle">标题:</label>
+                    <input type="text" id="taskTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="taskDescription">描述:</label>
+                    <textarea id="taskDescription" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="taskPriority">优先级:</label>
+                    <select id="taskPriority">
+                        <option value="low">低</option>
+                        <option value="medium" selected>中</option>
+                        <option value="high">高</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="taskDueDate">截止日期:</label>
+                    <input type="datetime-local" id="taskDueDate">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeTaskModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 笔记模态框 -->
+    <div id="noteModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2 id="noteModalTitle">添加笔记</h2>
+            <form id="noteForm" onsubmit="saveNote(event)">
+                <input type="hidden" id="noteId">
+                <div class="form-group">
+                    <label for="noteTitle">标题:</label>
+                    <input type="text" id="noteTitle" required>
+                </div>
+                <div class="form-group">
+                    <label for="noteContent">内容:</label>
+                    <textarea id="noteContent" rows="10"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeNoteModal()">取消</button>
+                    <button type="submit" class="btn btn-primary">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
