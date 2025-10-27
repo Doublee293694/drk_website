@@ -1456,8 +1456,125 @@ function showSection(sectionName) {
         case 'profile':
             loadProfile();
             break;
+        case 'blog':
+            // 博客页面无需预加载
+            break;
     }
 }
+
+// WordPress博客集成功能
+let wordPressPosts = [];
+
+async function loadWordPressBlog() {
+    const wpUrl = document.getElementById('wordpressUrl').value.trim();
+    
+    if (!wpUrl) {
+        showNotification('请输入WordPress网站URL', 'error');
+        return;
+    }
+    
+    // 确保URL格式正确
+    const blogUrl = wpUrl.endsWith('/') ? wpUrl.slice(0, -1) : wpUrl;
+    const apiUrl = `${blogUrl}/wp-json/wp/v2/posts?_embed&per_page=10`;
+    
+    try {
+        showNotification('正在加载博客内容...', 'info');
+        
+        const response = await fetch(apiUrl);
+        
+        if (!response.ok) {
+            throw new Error('无法连接到WordPress网站');
+        }
+        
+        const posts = await response.json();
+        wordPressPosts = posts;
+        displayBlogPosts(posts, blogUrl);
+        
+        showNotification(`成功加载 ${posts.length} 篇文章`, 'success');
+    } catch (error) {
+        console.error('加载博客失败:', error);
+        showNotification('加载博客失败，请检查URL是否正确', 'error');
+        
+        const blogPosts = document.getElementById('blogPosts');
+        blogPosts.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h3>加载失败</h3>
+                <p>无法连接到WordPress网站</p>
+                <p style="font-size: 12px; color: #999;">请确保：</p>
+                <ul style="text-align: left; font-size: 12px; color: #999;">
+                    <li>WordPress网站已启用REST API</li>
+                    <li>URL格式正确（包含http://或https://）</li>
+                    <li>网站可以正常访问</li>
+                </ul>
+            </div>
+        `;
+    }
+}
+
+function displayBlogPosts(posts, blogUrl) {
+    const blogPosts = document.getElementById('blogPosts');
+    
+    if (posts.length === 0) {
+        blogPosts.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-newspaper"></i>
+                <h3>暂无文章</h3>
+                <p>该WordPress网站还没有发布任何文章</p>
+            </div>
+        `;
+        return;
+    }
+    
+    blogPosts.innerHTML = posts.map((post, index) => {
+        const excerpt = post.excerpt ? 
+            post.excerpt.rendered.replace(/<[^>]*>/g, '').substring(0, 150) + '...' : 
+            '暂无摘要';
+        
+        const date = new Date(post.date).toLocaleDateString('zh-CN');
+        const featuredImage = post._embedded && post._embedded['wp:featuredmedia'] ? 
+            post._embedded['wp:featuredmedia'][0].source_url : null;
+        
+        return `
+            <div class="blog-post-item" onclick="showBlogPost(${index})">
+                ${featuredImage ? `<img src="${featuredImage}" style="width: 100%; max-height: 300px; object-fit: cover; border-radius: 8px; margin-bottom: 15px;">` : ''}
+                <div class="blog-post-title">${post.title.rendered}</div>
+                <div class="blog-post-excerpt">${excerpt}</div>
+                <div class="blog-post-meta">
+                    <span><i class="fas fa-calendar"></i> ${date}</span>
+                    <span><i class="fas fa-eye"></i> ${post._links['self'] ? '阅读' : ''}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function showBlogPost(index) {
+    const post = wordPressPosts[index];
+    if (!post) return;
+    
+    const blogUrl = document.getElementById('wordpressUrl').value.replace(/\/$/, '');
+    
+    document.getElementById('blogTitle').innerHTML = post.title.rendered;
+    document.getElementById('blogContent').innerHTML = post.content.rendered;
+    document.getElementById('blogLink').href = post.link;
+    
+    // 设置文章元信息
+    const authorName = post._embedded && post._embedded.author ? 
+        post._embedded.author[0].name : '未知作者';
+    const publishDate = new Date(post.date).toLocaleDateString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    
+    document.getElementById('blogAuthor').innerHTML = `<i class="fas fa-user"></i> ${authorName}`;
+    document.getElementById('blogDate').innerHTML = `<i class="fas fa-calendar"></i> ${publishDate}`;
+    
+    document.getElementById('blogModal').style.display = 'block';
+}
+
+// 添加WordPress代理API到后端
 
 // 初始化主题
 document.addEventListener('DOMContentLoaded', function() {

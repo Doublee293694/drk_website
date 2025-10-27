@@ -85,6 +85,9 @@
                 <button class="nav-btn" onclick="showSection('profile')">
                     <i class="fas fa-user"></i> 个人资料
                 </button>
+                <button class="nav-btn" onclick="showSection('blog')">
+                    <i class="fas fa-newspaper"></i> 博客
+                </button>
             </div>
             <div class="nav-user">
                 <span id="userWelcome">欢迎, <span id="username"></span></span>
@@ -365,6 +368,50 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WordPress博客 -->
+    <div id="blog" class="section">
+        <div class="container">
+            <div class="blog-header">
+                <h1>博客</h1>
+                <div class="blog-config">
+                    <input type="text" id="wordpressUrl" placeholder="WordPress网站URL" 
+                           value="https://your-wordpress-site.com">
+                    <button class="btn btn-primary" onclick="loadWordPressBlog()">
+                        <i class="fas fa-sync"></i> 加载博客
+                    </button>
+                </div>
+            </div>
+            
+            <div id="blogPosts" class="blog-posts">
+                <div class="empty-state">
+                    <i class="fas fa-newspaper"></i>
+                    <h3>加载博客内容</h3>
+                    <p>请输入WordPress网站URL并点击"加载博客"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 博客详情模态框 -->
+    <div id="blogModal" class="modal">
+        <div class="modal-content blog-modal">
+            <span class="close">&times;</span>
+            <h2 id="blogTitle">文章标题</h2>
+            <div class="blog-meta">
+                <span id="blogAuthor"></span>
+                <span id="blogDate"></span>
+            </div>
+            <div id="blogContent" class="blog-content">
+                <!-- 文章内容将通过JavaScript填充 -->
+            </div>
+            <div class="blog-footer">
+                <a id="blogLink" href="#" target="_blank" class="btn btn-primary">
+                    <i class="fas fa-external-link-alt"></i> 阅读原文
+                </a>
             </div>
         </div>
     </div>

@@ -1141,6 +1141,115 @@ body.dark-theme .form-group select:focus {
     }
 }
 
+/* WordPress博客样式 */
+.blog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+    gap: 20px;
+}
+
+.blog-config {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.blog-config input {
+    padding: 10px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 14px;
+    min-width: 300px;
+}
+
+.blog-posts {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 25px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+}
+
+.blog-post-item {
+    padding: 20px;
+    border-bottom: 1px solid #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.blog-post-item:hover {
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.blog-post-item:last-child {
+    border-bottom: none;
+}
+
+.blog-post-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.blog-post-excerpt {
+    font-size: 14px;
+    color: #666;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+.blog-post-meta {
+    font-size: 12px;
+    color: #999;
+    display: flex;
+    gap: 15px;
+}
+
+.blog-modal {
+    max-width: 800px;
+}
+
+.blog-meta {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+    color: #666;
+    font-size: 14px;
+}
+
+.blog-content {
+    line-height: 1.8;
+    color: #333;
+}
+
+.blog-content h3 {
+    color: #667eea;
+    margin-top: 25px;
+    margin-bottom: 15px;
+}
+
+.blog-content p {
+    margin-bottom: 15px;
+}
+
+.blog-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    margin: 15px 0;
+}
+
+.blog-footer {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 2px solid #f8f9fa;
+}
+
 /* 响应式设计更新 */
 @media (max-width: 768px) {
     .profile-content {
