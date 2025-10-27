@@ -1,0 +1,15 @@
+快速步骤：
+
+1. 在 https://supabase.com 点击 "New Project"
+
+2. 填写：
+   Name: drk-website
+   Password: （设置一个强密码）
+   Region: Tokyo
+
+3. 点击 "Create new project"
+
+4. 等待1分钟
+
+5. 完成后告诉我，我告诉您下一步！
+
